@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Lock, Users, Swords, BarChart3, Inbox, Database, Plus, Trash2, Check, RefreshCw, Download, Upload, Shield } from 'lucide-react';
 import { useEsports } from '../context/EsportsContext';
+import { verifyAdminPin } from '../services/api';
 import type { PlayerRole } from '../types';
 
 export const AdminModal: React.FC = () => {
@@ -27,6 +28,7 @@ export const AdminModal: React.FC = () => {
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pin, setPin] = useState('');
+  const [isVerifyingPin, setIsVerifyingPin] = useState(false);
   const [activeTab, setActiveTab] = useState<'roster' | 'matches' | 'stats' | 'applications' | 'database'>('roster');
 
   // Form states for adding player
@@ -61,19 +63,21 @@ export const AdminModal: React.FC = () => {
   // Stats edit state
   const [editedStats, setEditedStats] = useState(stats);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const staffPin = import.meta.env.VITE_STAFF_PIN ?? '';
-    if (!staffPin) {
-      showToast('Staff access is not configured. Contact an administrator.', 'error');
-      return;
-    }
-
-    if (pin.trim() === staffPin) {
-      setIsAuthenticated(true);
-      showToast('Authenticated as Grenite Esports Staff', 'success');
-    } else {
-      showToast('Incorrect Staff Access PIN.', 'error');
+    setIsVerifyingPin(true);
+    try {
+      if (await verifyAdminPin(pin)) {
+        setIsAuthenticated(true);
+        showToast('Authenticated as Grenite Esports Staff', 'success');
+      } else {
+        showToast('Incorrect Staff Access PIN.', 'error');
+      }
+    } catch (error) {
+      console.error('Staff PIN verification failed:', error);
+      showToast('Unable to verify Staff PIN. Please try again.', 'error');
+    } finally {
+      setIsVerifyingPin(false);
     }
   };
 
@@ -236,10 +240,11 @@ export const AdminModal: React.FC = () => {
                 autoFocus
               />
               <button
+                disabled={isVerifyingPin}
                 type="submit"
-                className="w-full py-3 rounded-lg bg-[#075BFF] hover:bg-[#1a6cff] text-white text-xs font-mono-code font-bold uppercase tracking-wider transition-colors shadow-lg"
+                className="w-full py-3 rounded-lg bg-[#075BFF] hover:bg-[#1a6cff] disabled:opacity-60 disabled:cursor-wait text-white text-xs font-mono-code font-bold uppercase tracking-wider transition-colors shadow-lg"
               >
-                UNLOCK STAFF PORTAL
+                {isVerifyingPin ? 'VERIFYING...' : 'UNLOCK STAFF PORTAL'}
               </button>
             </form>
           </div>

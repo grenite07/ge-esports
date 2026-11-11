@@ -2,6 +2,28 @@ import type { RecruitmentApplication, ContactMessage } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
+export async function verifyAdminPin(pin: string): Promise<boolean> {
+  const response = await fetch(`${API_BASE}/verify-admin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin }),
+  });
+
+  if (response.status === 401) {
+    return false;
+  }
+  if (!response.ok) {
+    throw new Error('Staff verification service is unavailable.');
+  }
+
+  const data: unknown = await response.json();
+  if (typeof data !== 'object' || data === null || !('success' in data) || data.success !== true) {
+    throw new Error('Staff verification returned an invalid response.');
+  }
+
+  return true;
+}
+
 export interface SendContactPayload {
   name: string;
   email: string;

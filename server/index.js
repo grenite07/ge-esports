@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { timingSafeEqual } from 'node:crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { readData, writeData } from './storage.js';
@@ -305,22 +306,20 @@ app.post('/api/newsletter', async (req, res) => {
   }
 });
 
-/**
- * ADMIN LOGIN CHECK
- */
-app.post('/api/admin/login', (req, res) => {
-  const { pin } = req.body;
-  const ADMIN_PIN = process.env.ADMIN_PIN;
-
-  if (
-    ADMIN_PIN &&
-    typeof pin === 'string' &&
-    pin.trim() === ADMIN_PIN
-  ) {
-    return res.json({ success: true, token: 'ge_admin_verified_session' });
+app.post('/api/verify-admin', (req, res) => {
+  const adminPin = process.env.ADMIN_PIN;
+  if (!adminPin) {
+    return res.status(503).json({ success: false, error: 'Staff access is not configured.' });
   }
 
-  res.status(401).json({ success: false, error: 'Invalid Staff Access Code.' });
+  const pin = req.body?.pin;
+  const submittedPin = typeof pin === 'string' ? Buffer.from(pin) : Buffer.alloc(0);
+  const configuredPin = Buffer.from(adminPin);
+  const isValid =
+    submittedPin.length === configuredPin.length &&
+    timingSafeEqual(submittedPin, configuredPin);
+
+  return res.status(isValid ? 200 : 401).json({ success: isValid });
 });
 
 // Start listening
