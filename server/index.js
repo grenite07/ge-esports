@@ -313,8 +313,10 @@ app.post('/api/verify-admin', (req, res) => {
   }
 
   const pin = req.body?.pin;
-  const submittedPin = typeof pin === 'string' ? Buffer.from(pin) : Buffer.alloc(0);
-  const configuredPin = Buffer.from(adminPin);
+  const submittedPin = typeof pin === 'string'
+    ? Buffer.from(pin.trim().toUpperCase())
+    : Buffer.alloc(0);
+  const configuredPin = Buffer.from(adminPin.trim().toUpperCase());
   const isValid =
     submittedPin.length === configuredPin.length &&
     timingSafeEqual(submittedPin, configuredPin);
