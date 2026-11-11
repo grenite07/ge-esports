@@ -1,0 +1,275 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --ge-bg: #08060D;
+    --ge-bg-secondary: #0D0A16;
+    --ge-black: #08060D;
+    --ge-charcoal: #120F1F;
+    --ge-card: #141124;
+    --ge-card-hover: #1A1630;
+    --ge-border: #26213D;
+    --ge-border-bright: #3D3563;
+    --ge-blue: #075BFF;
+    --ge-blue-hover: #1a6cff;
+    --ge-blue-subtle: rgba(7, 91, 255, 0.15);
+    --ge-violet: #8B5CF6;
+    --ge-violet-glow: rgba(139, 92, 246, 0.25);
+    --ge-cyan: #00F0FF;
+    --ge-cyan-glow: rgba(0, 240, 255, 0.25);
+    --ge-silver: #DDE1E8;
+    --ge-muted: #8E8A9F;
+    --ge-white: #FFFFFF;
+  }
+
+  * {
+    border-color: var(--ge-border);
+  }
+
+  body {
+    background-color: var(--ge-bg);
+    color: var(--ge-silver);
+    font-family: 'Rajdhani', 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow-x: hidden;
+  }
+
+  /* Custom subtle neon scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #08060D;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #26213D;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #8B5CF6;
+    box-shadow: 0 0 10px #8B5CF6;
+  }
+}
+
+/* Custom Futuristic Typography */
+.font-orbitron {
+  font-family: 'Orbitron', 'Space Grotesk', sans-serif;
+}
+
+.font-rajdhani {
+  font-family: 'Rajdhani', sans-serif;
+}
+
+.font-display {
+  font-family: 'Orbitron', 'Space Grotesk', sans-serif;
+  letter-spacing: 0.04em;
+}
+
+.font-mono-code {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Editorial cinematic typography */
+.editorial-title {
+  font-family: 'Orbitron', 'Space Grotesk', sans-serif;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+
+/* Glowing sub-header pill with neon violet/blue accent */
+.sub-header-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.85rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  background: linear-gradient(135deg, rgba(7, 91, 255, 0.15), rgba(139, 92, 246, 0.1));
+  backdrop-filter: blur(8px);
+  font-family: 'Orbitron', monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #00F0FF;
+  box-shadow: 0 0 20px rgba(7, 91, 255, 0.2);
+}
+
+/* 3D Perspective & Transform Engine */
+.perspective-800 {
+  perspective: 800px;
+}
+.perspective-1000 {
+  perspective: 1000px;
+}
+.perspective-1200 {
+  perspective: 1200px;
+}
+.perspective-1500 {
+  perspective: 1500px;
+}
+.perspective-2000 {
+  perspective: 2000px;
+}
+
+.transform-style-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+/* Futuristic Neon Glow Utilities */
+.glow-blue {
+  box-shadow: 0 0 25px rgba(7, 91, 255, 0.4);
+}
+
+.glow-violet {
+  box-shadow: 0 0 25px rgba(139, 92, 246, 0.4);
+}
+
+.glow-cyan {
+  box-shadow: 0 0 25px rgba(0, 240, 255, 0.4);
+}
+
+.glow-multi {
+  box-shadow: 0 0 35px rgba(7, 91, 255, 0.25), 0 0 60px rgba(139, 92, 246, 0.2);
+}
+
+.glow-text-blue {
+  text-shadow: 0 0 20px rgba(7, 91, 255, 0.7);
+}
+
+.glow-text-violet {
+  text-shadow: 0 0 20px rgba(139, 92, 246, 0.8), 0 0 40px rgba(139, 92, 246, 0.4);
+}
+
+.glow-text-cyan {
+  text-shadow: 0 0 15px rgba(0, 240, 255, 0.8);
+}
+
+/* Glassmorphism Luxury Gaming Panels */
+.glass-panel {
+  background: rgba(18, 15, 31, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.glass-panel-interactive {
+  background: rgba(18, 15, 31, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.glass-panel-interactive:hover {
+  background: rgba(26, 22, 48, 0.85);
+  border-color: rgba(0, 240, 255, 0.5);
+  box-shadow: 0 10px 40px rgba(7, 91, 255, 0.2), 0 0 25px rgba(139, 92, 246, 0.25);
+}
+
+.glass-nav {
+  background: rgba(8, 6, 13, 0.85);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.18);
+}
+
+/* Futuristic Corner Cut / Chamfered Cyberpunk Shapes */
+.cyber-card {
+  clip-path: polygon(
+    0 0,
+    calc(100% - 16px) 0,
+    100% 16px,
+    100% 100%,
+    16px 100%,
+    0 calc(100% - 16px)
+  );
+}
+
+.cyber-card-lg {
+  clip-path: polygon(
+    0 0,
+    calc(100% - 24px) 0,
+    100% 24px,
+    100% 100%,
+    24px 100%,
+    0 calc(100% - 24px)
+  );
+}
+
+/* Subtle futuristic grid and lighting */
+.bg-grid-pattern {
+  background-size: 48px 48px;
+  background-image: 
+    linear-gradient(to right, rgba(139, 92, 246, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(139, 92, 246, 0.05) 1px, transparent 1px);
+}
+
+.bg-circuit-dots {
+  background-size: 24px 24px;
+  background-image: radial-gradient(rgba(0, 240, 255, 0.08) 1px, transparent 1px);
+}
+
+/* Floating 3D Keyframe Animations */
+@keyframes floatSlow {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-12px) rotate(1deg);
+  }
+}
+
+@keyframes floatReverse {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(14px) rotate(-1.5deg);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.4;
+    filter: blur(90px);
+  }
+  50% {
+    opacity: 0.8;
+    filter: blur(120px);
+  }
+}
+
+@keyframes scanline {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(1000%);
+  }
+}
+
+.animate-float-slow {
+  animation: floatSlow 7s ease-in-out infinite;
+}
+
+.animate-float-reverse {
+  animation: floatReverse 8.5s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 6s ease-in-out infinite;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
