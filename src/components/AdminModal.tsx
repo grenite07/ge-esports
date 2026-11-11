@@ -63,12 +63,17 @@ export const AdminModal: React.FC = () => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanPin = pin.trim().toUpperCase();
-    if (cleanPin === 'GRENITE3106' || pin.trim() === 'GRENITE3106' || pin.trim() === 'admin' || cleanPin === 'STORM2026') {
+    const staffPin = import.meta.env.VITE_STAFF_PIN ?? '';
+    if (!staffPin) {
+      showToast('Staff access is not configured. Contact an administrator.', 'error');
+      return;
+    }
+
+    if (pin.trim() === staffPin) {
       setIsAuthenticated(true);
       showToast('Authenticated as Grenite Esports Staff', 'success');
     } else {
-      showToast('Incorrect Staff Access PIN. Authorized code: GRENITE3106', 'error');
+      showToast('Incorrect Staff Access PIN.', 'error');
     }
   };
 
@@ -226,7 +231,7 @@ export const AdminModal: React.FC = () => {
                 type="password"
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
-                placeholder="Enter Staff PIN (e.g. GRENITE3106)"
+                placeholder="Enter Staff PIN"
                 className="w-full bg-black border border-[#23242c] rounded-lg px-4 py-3 text-center text-sm text-white placeholder:text-[#555555] focus:outline-none focus:border-[#075BFF] font-mono-code"
                 autoFocus
               />
@@ -237,10 +242,6 @@ export const AdminModal: React.FC = () => {
                 UNLOCK STAFF PORTAL
               </button>
             </form>
-
-            <span className="font-mono-code text-[11px] text-[#666666]">
-              Authorized Passcode: <code className="text-[#00F0FF] bg-[#00F0FF]/10 border border-[#00F0FF]/30 px-2 py-0.5 rounded font-bold">GRENITE3106</code>
-            </span>
           </div>
         ) : (
           <div className="flex-1 flex flex-col overflow-hidden">

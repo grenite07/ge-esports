@@ -310,14 +310,12 @@ app.post('/api/newsletter', async (req, res) => {
  */
 app.post('/api/admin/login', (req, res) => {
   const { pin } = req.body;
-  const ADMIN_PIN = process.env.ADMIN_PIN || 'GRENITE3106';
+  const ADMIN_PIN = process.env.ADMIN_PIN;
 
   if (
-    pin === ADMIN_PIN ||
-    (pin && pin.toUpperCase() === ADMIN_PIN.toUpperCase()) ||
-    pin === 'GRENITE3106' ||
-    pin === 'grenite3106' ||
-    pin === '1337'
+    ADMIN_PIN &&
+    typeof pin === 'string' &&
+    pin.trim() === ADMIN_PIN
   ) {
     return res.json({ success: true, token: 'ge_admin_verified_session' });
   }
