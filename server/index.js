@@ -5,21 +5,25 @@ import { timingSafeEqual } from 'node:crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { readData, writeData } from './storage.js';
-import { sendContactEmail, sendRecruitmentEmail, sendDropAlertEmail } from './emailService.js';
-
-dotenv.config();
+import { sendContactEmail, sendRecruitmentEmail, sendDropAlertEmail, getEmailConfig } from './emailService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Ensure .env is loaded whether started from workspace root, server/, or container
+dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middlewares — Allow Vercel frontend + localhost
+const configuredFrontend = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/+$/, '') : null;
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
-  process.env.FRONTEND_URL,        // Set in Render env: e.g. https://ge-esports.vercel.app
+  configuredFrontend,
 ].filter(Boolean);
 
 app.use(cors({
@@ -41,12 +45,20 @@ app.use((req, res, next) => {
 });
 
 // Health check
-app.get('/api/health', (req, res) => {
+app.get(['/api/health', '/health'], (req, res) => {
+  const emailCfg = getEmailConfig();
   res.json({
     status: 'ONLINE',
     service: 'GE ESPORTS API & Mail Relay',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
+    adminAccessConfigured: Boolean(process.env.ADMIN_PIN && process.env.ADMIN_PIN.trim()),
+    smtpConfigured: Boolean(emailCfg.pass),
+    smtpHost: emailCfg.host,
+    smtpPort: emailCfg.port,
+    smtpSecure: emailCfg.secure,
+    senderEmail: emailCfg.senderEmail,
+    adminEmail: emailCfg.adminEmail,
   });
 });
 
@@ -54,9 +66,9 @@ app.get('/api/health', (req, res) => {
  * CONTACT & EMAIL INQUIRY ENDPOINT
  * Dispatches real email notification and logs message persistently
  */
-app.post('/api/contact', async (req, res) => {
+app.post(['/api/contact', '/contact'], async (req, res) => {
   try {
-    const { name, email, subject, category, message, phone, honeypot } = req.body;
+    const { name, email, subject, category, message, phone, honeypot } = req.body || {};
 
     // Bot trap
     if (honeypot) {
@@ -98,14 +110,18 @@ app.post('/api/contact', async (req, res) => {
       emailResult = await sendContactEmail(newMessage);
     } catch (mailErr) {
       console.error('Email dispatch error (handled):', mailErr.message);
+      emailResult = { success: false, error: mailErr.message };
     }
 
     res.status(201).json({
       success: true,
-      message: 'Your inquiry has been successfully transmitted and logged.',
+      message: emailResult.success
+        ? 'Your inquiry has been successfully transmitted and logged.'
+        : 'Inquiry saved to database. Email notification could not be delivered.',
       ticketId: messageId,
       timestamp,
-      emailDispatched: emailResult.success,
+      emailDispatched: Boolean(emailResult.success),
+      emailError: emailResult.error || null,
       previewUrl: emailResult.previewUrl || null,
     });
   } catch (error) {
@@ -117,7 +133,7 @@ app.post('/api/contact', async (req, res) => {
 /**
  * GET ALL CONTACT MESSAGES (For Admin CMS)
  */
-app.get('/api/contact/messages', (req, res) => {
+app.get(['/api/contact/messages', '/contact/messages'], (req, res) => {
   const messages = readData('messages.json', []);
   res.json({ success: true, count: messages.length, messages });
 });
@@ -125,7 +141,7 @@ app.get('/api/contact/messages', (req, res) => {
 /**
  * MARK MESSAGE AS READ / REPLIED
  */
-app.patch('/api/contact/messages/:id/read', (req, res) => {
+app.patch(['/api/contact/messages/:id/read', '/contact/messages/:id/read'], (req, res) => {
   const { id } = req.params;
   const messages = readData('messages.json', []);
   const idx = messages.findIndex((m) => m.id === id);
@@ -146,7 +162,7 @@ app.patch('/api/contact/messages/:id/read', (req, res) => {
 /**
  * DELETE MESSAGE
  */
-app.delete('/api/contact/messages/:id', (req, res) => {
+app.delete(['/api/contact/messages/:id', '/contact/messages/:id'], (req, res) => {
   const { id } = req.params;
   let messages = readData('messages.json', []);
   const initialLength = messages.length;
@@ -163,7 +179,7 @@ app.delete('/api/contact/messages/:id', (req, res) => {
 /**
  * RECRUITMENT APPLICATION SUBMISSION
  */
-app.post('/api/recruitment', async (req, res) => {
+app.post(['/api/recruitment', '/recruitment'], async (req, res) => {
   try {
     const {
       fullName,
@@ -177,7 +193,7 @@ app.post('/api/recruitment', async (req, res) => {
       contactPhone,
       discordId,
       honeypot,
-    } = req.body;
+    } = req.body || {};
 
     if (honeypot) {
       return res.status(400).json({ error: 'Spam detected.' });
@@ -217,14 +233,18 @@ app.post('/api/recruitment', async (req, res) => {
       emailResult = await sendRecruitmentEmail(application);
     } catch (mailErr) {
       console.error('Tryout email notification error (handled):', mailErr.message);
+      emailResult = { success: false, error: mailErr.message };
     }
 
     res.status(201).json({
       success: true,
       referenceId: appId,
-      message: 'Scouting application logged and confirmation email transmitted.',
+      message: emailResult.success
+        ? 'Scouting application logged and confirmation email transmitted.'
+        : 'Scouting application logged. Confirmation email could not be delivered.',
       application,
-      emailDispatched: emailResult.success,
+      emailDispatched: Boolean(emailResult.success),
+      emailError: emailResult.error || null,
     });
   } catch (error) {
     console.error('Error processing recruitment application:', error);
@@ -235,7 +255,7 @@ app.post('/api/recruitment', async (req, res) => {
 /**
  * GET RECRUITMENT APPLICATIONS (For Admin CMS)
  */
-app.get('/api/recruitment/applications', (req, res) => {
+app.get(['/api/recruitment/applications', '/recruitment/applications'], (req, res) => {
   const applications = readData('applications.json', []);
   res.json({ success: true, count: applications.length, applications });
 });
@@ -243,7 +263,7 @@ app.get('/api/recruitment/applications', (req, res) => {
 /**
  * UPDATE APPLICATION STATUS
  */
-app.patch('/api/recruitment/applications/:id/status', (req, res) => {
+app.patch(['/api/recruitment/applications/:id/status', '/recruitment/applications/:id/status'], (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
@@ -268,9 +288,9 @@ app.patch('/api/recruitment/applications/:id/status', (req, res) => {
 /**
  * MERCH DROP NOTIFICATION / NEWSLETTER
  */
-app.post('/api/newsletter', async (req, res) => {
+app.post(['/api/newsletter', '/newsletter'], async (req, res) => {
   try {
-    const { email, productName } = req.body;
+    const { email, productName } = req.body || {};
 
     if (!email || !email.includes('@')) {
       return res.status(400).json({ error: 'Valid email address is required.' });
@@ -306,28 +326,58 @@ app.post('/api/newsletter', async (req, res) => {
   }
 });
 
-app.post('/api/verify-admin', (req, res) => {
+/**
+ * ADMIN ACCESS PIN VERIFICATION
+ * Secure constant-time comparison against process.env.ADMIN_PIN
+ */
+app.post(['/api/verify-admin', '/verify-admin'], (req, res) => {
   const adminPin = process.env.ADMIN_PIN;
-  if (!adminPin) {
-    return res.status(503).json({ success: false, error: 'Staff access is not configured.' });
+  if (!adminPin || adminPin.trim() === '') {
+    return res.status(503).json({
+      success: false,
+      error: 'Staff access is not configured on the server (ADMIN_PIN is not set).',
+    });
   }
 
   const pin = req.body?.pin;
-  const submittedPin = typeof pin === 'string'
-    ? Buffer.from(pin.trim().toUpperCase())
-    : Buffer.alloc(0);
-  const configuredPin = Buffer.from(adminPin.trim().toUpperCase());
-  const isValid =
-    submittedPin.length === configuredPin.length &&
-    timingSafeEqual(submittedPin, configuredPin);
+  if (pin === undefined || pin === null) {
+    return res.status(400).json({ success: false, error: 'Staff PIN is required.' });
+  }
 
-  return res.status(isValid ? 200 : 401).json({ success: isValid });
+  const submittedStr = String(pin).trim();
+  const configuredStr = String(adminPin).trim();
+
+  if (!submittedStr) {
+    return res.status(401).json({ success: false, error: 'Incorrect Staff Access PIN.' });
+  }
+
+  // Safe timing comparison helper to prevent timing attacks
+  const safeCompare = (a, b) => {
+    const bufA = Buffer.from(a, 'utf8');
+    const bufB = Buffer.from(b, 'utf8');
+    if (bufA.length !== bufB.length) {
+      timingSafeEqual(bufA, bufA);
+      return false;
+    }
+    return timingSafeEqual(bufA, bufB);
+  };
+
+  // Allow match (exact case or case-insensitive for alphanumeric PINs)
+  const isValid =
+    safeCompare(submittedStr, configuredStr) ||
+    safeCompare(submittedStr.toUpperCase(), configuredStr.toUpperCase());
+
+  if (isValid) {
+    return res.status(200).json({ success: true, message: 'Authentication successful.' });
+  }
+
+  return res.status(401).json({ success: false, error: 'Incorrect Staff Access PIN.' });
 });
 
 // Start listening
 app.listen(PORT, () => {
   console.log(`===============================================`);
   console.log(`⚡ GE ESPORTS BACKEND API ACTIVE ON PORT ${PORT}`);
-  console.log(`📡 Endpoints: /api/contact, /api/recruitment, /api/newsletter`);
+  console.log(`📡 Endpoints: /api/contact, /api/recruitment, /api/newsletter, /api/verify-admin`);
   console.log(`===============================================`);
 });

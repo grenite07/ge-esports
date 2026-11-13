@@ -65,17 +65,24 @@ export const AdminModal: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanPin = pin.trim();
+    if (!cleanPin) {
+      showToast('Please enter Staff Access PIN.', 'error');
+      return;
+    }
     setIsVerifyingPin(true);
     try {
-      if (await verifyAdminPin(pin)) {
+      const isValid = await verifyAdminPin(cleanPin);
+      if (isValid) {
         setIsAuthenticated(true);
+        setPin('');
         showToast('Authenticated as Grenite Esports Staff', 'success');
       } else {
         showToast('Incorrect Staff Access PIN.', 'error');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Staff PIN verification failed:', error);
-      showToast('Unable to verify Staff PIN. Please try again.', 'error');
+      showToast(error?.message || 'Unable to verify Staff PIN. Please try again.', 'error');
     } finally {
       setIsVerifyingPin(false);
     }
@@ -205,13 +212,28 @@ export const AdminModal: React.FC = () => {
             </div>
           </div>
 
-          <button
-            onClick={() => setIsAdminOpen(false)}
-            className="p-1.5 rounded-lg text-[#888888] hover:text-white hover:bg-white/5"
-            aria-label="Close CMS"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {isAuthenticated && (
+              <button
+                onClick={() => {
+                  setIsAuthenticated(false);
+                  setPin('');
+                  showToast('Signed out of Staff CMS', 'info');
+                }}
+                className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-[11px] font-mono-code text-[#888888] hover:text-white border border-white/10 transition-colors"
+                title="Lock Staff CMS"
+              >
+                LOCK CMS
+              </button>
+            )}
+            <button
+              onClick={() => setIsAdminOpen(false)}
+              className="p-1.5 rounded-lg text-[#888888] hover:text-white hover:bg-white/5"
+              aria-label="Close CMS"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Auth Gate */}

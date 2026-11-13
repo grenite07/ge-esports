@@ -1,22 +1,44 @@
 import type { RecruitmentApplication, ContactMessage } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+// Safely normalize API_BASE from VITE_API_URL:
+// - If empty/undefined: defaults to '/api' (handled by Vite dev proxy or same-domain production)
+// - If ends with '/api' (with or without trailing slash): uses normalized base without trailing slash
+// - If does NOT end with '/api': appends '/api'
+const rawBase = (import.meta.env.VITE_API_URL || '').trim();
+export const API_BASE = rawBase
+  ? rawBase.replace(/\/+$/, '').endsWith('/api')
+    ? rawBase.replace(/\/+$/, '')
+    : `${rawBase.replace(/\/+$/, '')}/api`
+  : '/api';
 
+/**
+ * Verify Staff PIN via Backend Endpoint (process.env.ADMIN_PIN)
+ * Never hardcodes or exposes secrets client-side.
+ */
 export async function verifyAdminPin(pin: string): Promise<boolean> {
+  const trimmedPin = (pin || '').trim();
+  if (!trimmedPin) return false;
+
   const response = await fetch(`${API_BASE}/verify-admin`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pin }),
+    body: JSON.stringify({ pin: trimmedPin }),
   });
+
+  const data = await response.json().catch(() => null);
 
   if (response.status === 401) {
     return false;
   }
+
   if (!response.ok) {
-    throw new Error('Staff verification service is unavailable.');
+    const errorMsg =
+      data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
+        ? data.error
+        : `Staff verification service returned HTTP ${response.status}.`;
+    throw new Error(errorMsg);
   }
 
-  const data: unknown = await response.json();
   if (typeof data !== 'object' || data === null || !('success' in data) || data.success !== true) {
     throw new Error('Staff verification returned an invalid response.');
   }
@@ -40,6 +62,7 @@ export interface SendContactResponse {
   ticketId: string;
   timestamp: string;
   emailDispatched: boolean;
+  emailError?: string | null;
   previewUrl?: string | null;
   error?: string;
 }
@@ -64,6 +87,7 @@ export interface SubmitRecruitmentResponse {
   message: string;
   application: RecruitmentApplication;
   emailDispatched: boolean;
+  emailError?: string | null;
   error?: string;
 }
 
@@ -92,7 +116,8 @@ export async function sendContactMessage(payload: SendContactPayload): Promise<S
       message: 'Transmission dispatched and queued for delivery.',
       ticketId: `MSG-LOC-${Date.now().toString(36).toUpperCase()}`,
       timestamp: new Date().toISOString(),
-      emailDispatched: true,
+      emailDispatched: false,
+      emailError: err.message,
     };
   }
 }
@@ -138,7 +163,8 @@ export async function submitRecruitmentApplication(
         timestamp: new Date().toISOString(),
         status: 'PENDING REVIEW',
       },
-      emailDispatched: true,
+      emailDispatched: false,
+      emailError: err.message,
     };
   }
 }
@@ -154,7 +180,7 @@ export async function subscribeDropNotification(email: string, productName?: str
       body: JSON.stringify({ email, productName }),
     });
     return await res.json();
-  } catch (err) {
+  } catch (_err) {
     return { success: true, message: 'Priority alert registered.' };
   }
 }
@@ -168,7 +194,7 @@ export async function fetchContactMessages(): Promise<ContactMessage[]> {
     if (!res.ok) return [];
     const data = await res.json();
     return data.messages || [];
-  } catch (err) {
+  } catch (_err) {
     return [];
   }
 }
@@ -184,7 +210,7 @@ export async function markMessageAsRead(id: string, replied?: boolean): Promise<
       body: JSON.stringify({ replied }),
     });
     return res.ok;
-  } catch (err) {
+  } catch (_err) {
     return false;
   }
 }
@@ -198,7 +224,7 @@ export async function deleteContactMessage(id: string): Promise<boolean> {
       method: 'DELETE',
     });
     return res.ok;
-  } catch (err) {
+  } catch (_err) {
     return false;
   }
 }
