@@ -11,6 +11,44 @@ export const API_BASE = rawBase
     : `${rawBase.replace(/\/+$/, '')}/api`
   : '/api';
 
+const ADMIN_TOKEN_KEY = 'ge_admin_token';
+
+export function getAdminToken(): string | null {
+  try {
+    return localStorage.getItem(ADMIN_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setAdminToken(token: string): void {
+  try {
+    localStorage.setItem(ADMIN_TOKEN_KEY, token);
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function clearAdminToken(): void {
+  try {
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+  } catch {
+    // Ignore
+  }
+}
+
+function getAuthHeaders(): HeadersInit {
+  const token = getAdminToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+    headers['x-admin-token'] = token;
+  }
+  return headers;
+}
+
 /**
  * Verify Staff PIN via Backend Endpoint (process.env.ADMIN_PIN)
  * Never hardcodes or exposes secrets client-side.
@@ -28,6 +66,7 @@ export async function verifyAdminPin(pin: string): Promise<boolean> {
   const data = await response.json().catch(() => null);
 
   if (response.status === 401) {
+    clearAdminToken();
     return false;
   }
 
@@ -43,7 +82,54 @@ export async function verifyAdminPin(pin: string): Promise<boolean> {
     throw new Error('Staff verification returned an invalid response.');
   }
 
+  if (data.token && typeof data.token === 'string') {
+    setAdminToken(data.token);
+  }
+
   return true;
+}
+
+/**
+ * Check if the stored admin session is still valid
+ */
+export async function checkAdminSession(): Promise<boolean> {
+  const token = getAdminToken();
+  if (!token) return false;
+
+  try {
+    const response = await fetch(`${API_BASE}/admin/session`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+
+    if (response.ok) {
+      const data = await response.json().catch(() => null);
+      return data?.authenticated === true;
+    }
+
+    // Token invalid or expired
+    clearAdminToken();
+    return false;
+  } catch {
+    // If backend is temporarily unreachable, maintain offline check if token format is valid
+    return false;
+  }
+}
+
+/**
+ * Admin Logout
+ */
+export async function adminLogout(): Promise<void> {
+  try {
+    await fetch(`${API_BASE}/admin/logout`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+  } catch {
+    // Ignore network errors on logout
+  } finally {
+    clearAdminToken();
+  }
 }
 
 export interface SendContactPayload {
@@ -62,6 +148,7 @@ export interface SendContactResponse {
   ticketId: string;
   timestamp: string;
   emailDispatched: boolean;
+  emailSimulated?: boolean;
   emailError?: string | null;
   previewUrl?: string | null;
   error?: string;
@@ -87,6 +174,7 @@ export interface SubmitRecruitmentResponse {
   message: string;
   application: RecruitmentApplication;
   emailDispatched: boolean;
+  emailSimulated?: boolean;
   emailError?: string | null;
   error?: string;
 }
@@ -109,16 +197,8 @@ export async function sendContactMessage(payload: SendContactPayload): Promise<S
 
     return data;
   } catch (err: any) {
-    console.warn('API error, falling back to client-assisted simulation:', err.message);
-    return {
-      success: false,
-      message: 'Contact service is unavailable.',
-      ticketId: '',
-      timestamp: new Date().toISOString(),
-      emailDispatched: false,
-      emailError: err.message,
-      error: err.message,
-    };
+    console.warn('API connection issue:', err.message);
+    throw err;
   }
 }
 
@@ -142,30 +222,8 @@ export async function submitRecruitmentApplication(
 
     return data;
   } catch (err: any) {
-    console.warn('API error, using local fallback:', err.message);
-    const fallbackId = `GE-TRYOUT-${Date.now().toString(36).toUpperCase()}`;
-    return {
-      success: true,
-      referenceId: fallbackId,
-      message: 'Scouting application logged.',
-      application: {
-        id: fallbackId,
-        fullName: payload.fullName,
-        ign: payload.ign,
-        uid: payload.uid,
-        preferredRole: payload.preferredRole as any,
-        competitiveExperience: payload.competitiveExperience,
-        previousTeams: payload.previousTeams,
-        gameplayVideoUrl: payload.gameplayVideoUrl,
-        contactEmail: payload.contactEmail,
-        contactPhone: payload.contactPhone,
-        discordId: payload.discordId,
-        timestamp: new Date().toISOString(),
-        status: 'PENDING REVIEW',
-      },
-      emailDispatched: false,
-      emailError: err.message,
-    };
+    console.warn('Recruitment API issue:', err.message);
+    throw err;
   }
 }
 
@@ -180,51 +238,54 @@ export async function subscribeDropNotification(email: string, productName?: str
       body: JSON.stringify({ email, productName }),
     });
     return await res.json();
-  } catch (_err) {
+  } catch {
     return { success: true, message: 'Priority alert registered.' };
   }
 }
 
 /**
- * Fetch all received contact inquiries (For Admin CMS)
+ * Fetch all received contact inquiries (For Admin CMS - Authenticated)
  */
 export async function fetchContactMessages(): Promise<ContactMessage[]> {
   try {
-    const res = await fetch(`${API_BASE}/contact/messages`);
+    const res = await fetch(`${API_BASE}/contact/messages`, {
+      headers: getAuthHeaders(),
+    });
     if (!res.ok) return [];
     const data = await res.json();
     return data.messages || [];
-  } catch (_err) {
+  } catch {
     return [];
   }
 }
 
 /**
- * Mark message as read
+ * Mark message as read (Authenticated)
  */
 export async function markMessageAsRead(id: string, replied?: boolean): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE}/contact/messages/${id}/read`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ replied }),
     });
     return res.ok;
-  } catch (_err) {
+  } catch {
     return false;
   }
 }
 
 /**
- * Delete contact message
+ * Delete contact message (Authenticated)
  */
 export async function deleteContactMessage(id: string): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE}/contact/messages/${id}`, {
       method: 'DELETE',
+      headers: getAuthHeaders(),
     });
     return res.ok;
-  } catch (_err) {
+  } catch {
     return false;
   }
 }

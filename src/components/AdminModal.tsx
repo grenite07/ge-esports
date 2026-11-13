@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Lock, Users, Swords, BarChart3, Inbox, Database, Plus, Trash2, Check, RefreshCw, Download, Upload, Shield } from 'lucide-react';
 import { useEsports } from '../context/EsportsContext';
-import { verifyAdminPin } from '../services/api';
+import { verifyAdminPin, checkAdminSession, adminLogout } from '../services/api';
 import type { PlayerRole } from '../types';
 
 export const AdminModal: React.FC = () => {
@@ -30,6 +30,17 @@ export const AdminModal: React.FC = () => {
   const [pin, setPin] = useState('');
   const [isVerifyingPin, setIsVerifyingPin] = useState(false);
   const [activeTab, setActiveTab] = useState<'roster' | 'matches' | 'stats' | 'applications' | 'database'>('roster');
+
+  // Check existing session persistence on open
+  useEffect(() => {
+    if (isAdminOpen) {
+      checkAdminSession().then((valid) => {
+        if (valid) {
+          setIsAuthenticated(true);
+        }
+      });
+    }
+  }, [isAdminOpen]);
 
   // Form states for adding player
   const [newPlayer, setNewPlayer] = useState({
@@ -86,6 +97,13 @@ export const AdminModal: React.FC = () => {
     } finally {
       setIsVerifyingPin(false);
     }
+  };
+
+  const handleLogout = async () => {
+    await adminLogout();
+    setIsAuthenticated(false);
+    setPin('');
+    showToast('Signed out of Staff CMS', 'info');
   };
 
   const handleCreatePlayer = (e: React.FormEvent) => {
@@ -215,11 +233,7 @@ export const AdminModal: React.FC = () => {
           <div className="flex items-center gap-2">
             {isAuthenticated && (
               <button
-                onClick={() => {
-                  setIsAuthenticated(false);
-                  setPin('');
-                  showToast('Signed out of Staff CMS', 'info');
-                }}
+                onClick={handleLogout}
                 className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-[11px] font-mono-code text-[#888888] hover:text-white border border-white/10 transition-colors"
                 title="Lock Staff CMS"
               >

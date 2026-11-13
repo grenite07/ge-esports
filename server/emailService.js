@@ -33,7 +33,7 @@ export function getEmailConfig() {
   const user = process.env.SMTP_USER || process.env.SENDER_EMAIL || 'grenite07@gmail.com';
   let pass = (process.env.SMTP_PASS || '').trim();
 
-  // Strip spaces if user pasted a 16-character Google App Password with space separators
+  // Strip spaces if user pasted a 16-character Google App Password with space separators (e.g. "abcd efgh ijkl mnop")
   if (host.includes('gmail.com') && pass.replace(/\s+/g, '').length === 16) {
     pass = pass.replace(/\s+/g, '');
   }
@@ -70,6 +70,64 @@ let activeTransporter = null;
 let lastVerifiedKey = null;
 
 /**
+ * Verify SMTP connection and return diagnostic result
+ */
+export async function verifySmtpConnection() {
+  const config = getEmailConfig();
+  if (!config.pass) {
+    return {
+      configured: false,
+      connected: false,
+      error: 'SMTP_PASS environment variable is not configured.',
+    };
+  }
+
+  try {
+    const mailer = createTransportInstance(config);
+    await mailer.verify();
+    return {
+      configured: true,
+      connected: true,
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      user: config.user,
+    };
+  } catch (err) {
+    // Attempt fallback port (465 <-> 587)
+    const altPort = config.port === 465 ? 587 : (config.port === 587 ? 465 : null);
+    if (altPort !== null) {
+      try {
+        const altSecure = altPort === 465;
+        const fallbackMailer = createTransportInstance({ ...config, port: altPort, secure: altSecure });
+        await fallbackMailer.verify();
+        return {
+          configured: true,
+          connected: true,
+          host: config.host,
+          port: altPort,
+          secure: altSecure,
+          user: config.user,
+          note: `Connected via alternate port ${altPort}`,
+        };
+      } catch (altErr) {
+        return {
+          configured: true,
+          connected: false,
+          error: `Primary (${config.host}:${config.port}): ${err.message}; Fallback (${config.host}:${altPort}): ${altErr.message}`,
+        };
+      }
+    }
+
+    return {
+      configured: true,
+      connected: false,
+      error: err.message,
+    };
+  }
+}
+
+/**
  * Initialize and verify email transporter
  */
 export async function getTransporter() {
@@ -85,18 +143,18 @@ export async function getTransporter() {
     try {
       const primaryMailer = createTransportInstance(config);
       await primaryMailer.verify();
-      console.log(`✔ SMTP Transporter verified successfully via ${config.host}:${config.port} (secure: ${config.secure}) for ${config.user}.`);
+      console.log(`[SMTP] Transporter verified successfully via ${config.host}:${config.port} (secure: ${config.secure}) for ${config.user}.`);
       activeTransporter = primaryMailer;
       lastVerifiedKey = configKey;
       return activeTransporter;
     } catch (primaryErr) {
-      console.warn(`⚠ Primary SMTP verification failed (${config.host}:${config.port}, secure: ${config.secure}): ${primaryErr.message}`);
+      console.warn(`[SMTP WARN] Primary SMTP verification failed (${config.host}:${config.port}, secure: ${config.secure}): ${primaryErr.message}`);
 
       // 2. Cloud provider / network fallback: If 465 failed (often firewalled), try 587 (or vice-versa)
       const altPort = config.port === 465 ? 587 : (config.port === 587 ? 465 : null);
       if (altPort !== null) {
         const altSecure = altPort === 465;
-        console.log(`🔄 Attempting alternate SMTP configuration on ${config.host}:${altPort} (secure: ${altSecure})...`);
+        console.log(`[SMTP] Attempting alternate configuration on ${config.host}:${altPort} (secure: ${altSecure})...`);
         try {
           const fallbackMailer = createTransportInstance({
             ...config,
@@ -104,12 +162,12 @@ export async function getTransporter() {
             secure: altSecure,
           });
           await fallbackMailer.verify();
-          console.log(`✔ Alternate SMTP Transporter verified successfully via ${config.host}:${altPort} for ${config.user}.`);
+          console.log(`[SMTP] Alternate SMTP Transporter verified successfully via ${config.host}:${altPort} for ${config.user}.`);
           activeTransporter = fallbackMailer;
           lastVerifiedKey = configKey;
           return activeTransporter;
         } catch (fallbackErr) {
-          console.warn(`⚠ Alternate SMTP verification also failed (${config.host}:${altPort}): ${fallbackErr.message}`);
+          console.warn(`[SMTP WARN] Alternate SMTP verification also failed (${config.host}:${altPort}): ${fallbackErr.message}`);
         }
       }
 
@@ -118,12 +176,8 @@ export async function getTransporter() {
     }
   }
 
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('SMTP_PASS is not configured; email delivery is unavailable.');
-  }
-
   // Fallback simulator driver for local development when SMTP_PASS is not provided
-  console.log(`ℹ No SMTP_PASS configured in environment; utilizing local simulated mail driver.`);
+  console.log(`[SMTP INFO] No SMTP_PASS configured in environment; utilizing local simulated mail driver.`);
   return {
     sendMail: async (mailOptions) => {
       const messageId = `sim_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
@@ -139,7 +193,7 @@ export async function getTransporter() {
 
 /**
  * Direct Relay Dispatcher
- * Sends email directly to destination (grenite07@gmail.com) via verified HTTPS relay
+ * Sends email directly to destination via verified HTTPS relay fallback
  */
 export async function sendDirectRelayEmail({ to, replyTo, subject, fields }) {
   const { adminEmail } = getEmailConfig();
@@ -164,15 +218,15 @@ export async function sendDirectRelayEmail({ to, replyTo, subject, fields }) {
 
     if (res.ok) {
       const data = await res.json();
-      console.log(`✔ [DIRECT RELAY SUCCESS] Email transmitted to ${targetEmail}`);
+      console.log(`[RELAY SUCCESS] Email transmitted to ${targetEmail}`);
       return { success: true, method: 'direct_relay', details: data };
     } else {
       const errText = await res.text().catch(() => '');
-      console.warn(`[DIRECT RELAY WARN] HTTP ${res.status}: ${errText}`);
+      console.warn(`[RELAY WARN] HTTP ${res.status}: ${errText}`);
       return { success: false, status: res.status, error: errText };
     }
   } catch (err) {
-    console.warn(`[DIRECT RELAY EXCEPTION]:`, err.message);
+    console.warn(`[RELAY EXCEPTION]:`, err.message);
     return { success: false, error: err.message };
   }
 }
@@ -186,6 +240,7 @@ export async function sendContactEmail({ name, email, subject, category, message
   let adminDeliverySuccess = false;
   let adminMessageId = null;
   let lastError = null;
+  let isSimulated = false;
 
   // 1. Attempt SMTP Transporter
   try {
@@ -220,17 +275,23 @@ export async function sendContactEmail({ name, email, subject, category, message
     };
 
     const adminResult = await mailer.sendMail(adminMail);
-    adminDeliverySuccess = true;
-    adminMessageId = adminResult.messageId;
-    console.log(`✔ [CONTACT EMAIL SENT] Notification delivered to ${adminEmail} (ID: ${adminMessageId})`);
+    if (adminResult.simulated) {
+      isSimulated = true;
+      adminDeliverySuccess = true;
+      adminMessageId = adminResult.messageId;
+    } else {
+      adminDeliverySuccess = true;
+      adminMessageId = adminResult.messageId;
+      console.log(`[CONTACT EMAIL] Notification delivered to ${adminEmail} (MessageId: ${adminMessageId})`);
+    }
   } catch (err) {
     lastError = err;
-    console.error('SMTP error sending contact email:', err.message);
+    console.error('[SMTP ERROR] Failed sending contact email:', err.message);
   }
 
   // 2. Direct Relay Fallback (attempts HTTPS relay if SMTP failed and target is admin)
   if (!adminDeliverySuccess) {
-    console.log('Attempting direct relay fallback for contact inquiry...');
+    console.log('[RELAY] Attempting direct relay fallback for contact inquiry...');
     const relayResult = await sendDirectRelayEmail({
       to: adminEmail,
       replyTo: email,
@@ -286,16 +347,17 @@ export async function sendContactEmail({ name, email, subject, category, message
         `,
       };
       await mailer.sendMail(userMail);
-      console.log(`✔ [USER CONFIRMATION SENT] Confirmation delivered to ${email}`);
+      console.log(`[USER RECEIPT] Confirmation copy delivered to ${email}`);
     } catch (err) {
-      console.warn('Could not dispatch automated confirmation copy to user:', err.message);
+      console.warn('[USER RECEIPT WARN] Could not dispatch confirmation copy to user:', err.message);
     }
   }
 
   return {
     success: adminDeliverySuccess,
+    simulated: isSimulated,
     messageId: adminMessageId || `ticket_${Date.now()}`,
-    directDelivered: adminDeliverySuccess,
+    directDelivered: adminDeliverySuccess && !isSimulated,
     error: adminDeliverySuccess ? undefined : (lastError ? lastError.message : 'Email delivery failed'),
   };
 }
@@ -309,6 +371,7 @@ export async function sendRecruitmentEmail(application) {
   let adminDeliverySuccess = false;
   let adminMessageId = null;
   let lastError = null;
+  let isSimulated = false;
 
   // 1. Notify Management via SMTP
   try {
@@ -344,17 +407,23 @@ export async function sendRecruitmentEmail(application) {
       `,
     };
     const adminResult = await mailer.sendMail(adminMail);
-    adminDeliverySuccess = true;
-    adminMessageId = adminResult.messageId;
-    console.log(`✔ [RECRUITMENT EMAIL SENT] Scouting report delivered to ${adminEmail} (ID: ${adminMessageId})`);
+    if (adminResult.simulated) {
+      isSimulated = true;
+      adminDeliverySuccess = true;
+      adminMessageId = adminResult.messageId;
+    } else {
+      adminDeliverySuccess = true;
+      adminMessageId = adminResult.messageId;
+      console.log(`[RECRUITMENT EMAIL] Scouting report delivered to ${adminEmail} (ID: ${adminMessageId})`);
+    }
   } catch (err) {
     lastError = err;
-    console.error('SMTP error for recruitment email:', err.message);
+    console.error('[SMTP ERROR] Failed sending recruitment email:', err.message);
   }
 
   // 2. Direct Relay Fallback to adminEmail
   if (!adminDeliverySuccess) {
-    console.log('Attempting direct relay fallback for recruitment application...');
+    console.log('[RELAY] Attempting direct relay fallback for recruitment application...');
     const relayResult = await sendDirectRelayEmail({
       to: adminEmail,
       replyTo: application.contactEmail,
@@ -420,16 +489,17 @@ export async function sendRecruitmentEmail(application) {
         `,
       };
       await mailer.sendMail(userMail);
-      console.log(`✔ [CANDIDATE CONFIRMATION SENT] Scouting confirmation delivered to ${application.contactEmail}`);
+      console.log(`[CANDIDATE RECEIPT] Scouting confirmation delivered to ${application.contactEmail}`);
     } catch (err) {
-      console.warn('Could not dispatch player tryout confirmation copy:', err.message);
+      console.warn('[CANDIDATE RECEIPT WARN] Could not dispatch player tryout confirmation copy:', err.message);
     }
   }
 
   return {
     success: adminDeliverySuccess,
+    simulated: isSimulated,
     messageId: adminMessageId || application.id,
-    directDelivered: adminDeliverySuccess,
+    directDelivered: adminDeliverySuccess && !isSimulated,
     error: adminDeliverySuccess ? undefined : (lastError ? lastError.message : 'Email delivery failed'),
   };
 }
@@ -463,7 +533,7 @@ export async function sendDropAlertEmail({ email, productName }) {
     const res = await mailer.sendMail(mailOptions);
     return { success: true, messageId: res.messageId };
   } catch (err) {
-    console.warn('Drop alert email warning:', err.message);
+    console.warn('[DROP ALERT WARN]:', err.message);
     return { success: false, error: err.message };
   }
 }

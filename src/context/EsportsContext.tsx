@@ -172,31 +172,43 @@ export const EsportsProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Send contact message via backend API and update state
   const sendEmailMessage = async (payload: SendContactPayload): Promise<SendContactResponse> => {
-    const res = await sendContactMessage(payload);
-    if (res.success) {
-      const newMessage: ContactMessage = {
-        id: res.ticketId,
-        name: payload.name,
-        email: payload.email,
-        phone: payload.phone,
-        subject: payload.subject,
-        category: payload.category,
-        message: payload.message,
-        timestamp: res.timestamp || new Date().toISOString(),
-        isRead: false,
-        replied: false,
+    try {
+      const res = await sendContactMessage(payload);
+      if (res.success) {
+        const newMessage: ContactMessage = {
+          id: res.ticketId,
+          name: payload.name,
+          email: payload.email,
+          phone: payload.phone,
+          subject: payload.subject,
+          category: payload.category,
+          message: payload.message,
+          timestamp: res.timestamp || new Date().toISOString(),
+          isRead: false,
+          replied: false,
+        };
+        setMessages((prev) => [newMessage, ...prev]);
+
+        if (res.emailDispatched) {
+          showToast(`Transmission delivered! Ticket #${res.ticketId}. Our desk will respond to ${payload.email}.`, 'success');
+        } else {
+          showToast(`Inquiry recorded (#${res.ticketId}), but email notification could not be delivered to staff inbox.`, 'info');
+        }
+      } else {
+        showToast(res.error || 'Could not send message. Please try again.', 'error');
+      }
+      return res;
+    } catch (err: any) {
+      showToast(err?.message || 'Could not send message. Please check connection.', 'error');
+      return {
+        success: false,
+        message: err?.message || 'Failed to dispatch email message',
+        ticketId: '',
+        timestamp: new Date().toISOString(),
+        emailDispatched: false,
+        error: err?.message,
       };
-      setMessages((prev) => [newMessage, ...prev]);
-      showToast(
-        res.emailDispatched
-          ? `Transmission sent! Receipt #${res.ticketId}.`
-          : `Inquiry recorded as #${res.ticketId}, but the email notification was not sent.`,
-        res.emailDispatched ? 'success' : 'error'
-      );
-    } else {
-      showToast(res.error || 'Could not send message. Please try again.', 'error');
     }
-    return res;
   };
 
   const markMessageRead = async (id: string, replied?: boolean) => {
@@ -260,20 +272,29 @@ export const EsportsProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const submitApplication = async (appData: Omit<RecruitmentApplication, 'id' | 'timestamp' | 'status'>): Promise<string> => {
-    const res = await submitRecruitmentApplication({
-      ...appData,
-      preferredRole: appData.preferredRole,
-    });
-    const appId = res.referenceId;
-    const newApp: RecruitmentApplication = res.application || {
-      ...appData,
-      id: appId,
-      timestamp: new Date().toISOString(),
-      status: 'PENDING REVIEW',
-    };
-    setApplications((prev) => [newApp, ...prev]);
-    showToast(`Application ${appId} submitted successfully! Confirmation sent to ${appData.contactEmail}.`, 'success');
-    return appId;
+    try {
+      const res = await submitRecruitmentApplication({
+        ...appData,
+        preferredRole: appData.preferredRole,
+      });
+      const appId = res.referenceId;
+      const newApp: RecruitmentApplication = res.application || {
+        ...appData,
+        id: appId,
+        timestamp: new Date().toISOString(),
+        status: 'PENDING REVIEW',
+      };
+      setApplications((prev) => [newApp, ...prev]);
+      if (res.emailDispatched) {
+        showToast(`Application ${appId} submitted successfully! Confirmation sent to ${appData.contactEmail}.`, 'success');
+      } else {
+        showToast(`Application ${appId} logged. Email notification could not be dispatched.`, 'info');
+      }
+      return appId;
+    } catch (err: any) {
+      showToast(err?.message || 'Could not submit application. Please retry.', 'error');
+      throw err;
+    }
   };
 
   const updateApplicationStatus = (id: string, status: RecruitmentApplication['status']) => {
