@@ -187,7 +187,12 @@ export const EsportsProvider: React.FC<{ children: React.ReactNode }> = ({ child
         replied: false,
       };
       setMessages((prev) => [newMessage, ...prev]);
-      showToast(`Transmission logged! Receipt #${res.ticketId}. Our desk will respond to ${payload.email}.`, 'success');
+      showToast(
+        res.emailDispatched
+          ? `Transmission sent! Receipt #${res.ticketId}.`
+          : `Inquiry recorded as #${res.ticketId}, but the email notification was not sent.`,
+        res.emailDispatched ? 'success' : 'error'
+      );
     } else {
       showToast(res.error || 'Could not send message. Please try again.', 'error');
     }

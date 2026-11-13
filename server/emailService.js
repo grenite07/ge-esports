@@ -118,6 +118,10 @@ export async function getTransporter() {
     }
   }
 
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('SMTP_PASS is not configured; email delivery is unavailable.');
+  }
+
   // Fallback simulator driver for local development when SMTP_PASS is not provided
   console.log(`ℹ No SMTP_PASS configured in environment; utilizing local simulated mail driver.`);
   return {
@@ -177,7 +181,7 @@ export async function sendDirectRelayEmail({ to, replyTo, subject, fields }) {
  * Send Contact Message Email
  */
 export async function sendContactEmail({ name, email, subject, category, message, phone }) {
-  const { senderEmail, adminEmail, pass } = getEmailConfig();
+  const { senderEmail, adminEmail } = getEmailConfig();
   const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
   let adminDeliverySuccess = false;
   let adminMessageId = null;
@@ -289,7 +293,7 @@ export async function sendContactEmail({ name, email, subject, category, message
   }
 
   return {
-    success: adminDeliverySuccess || !pass, // If in local simulated mode (!pass), treat as simulated success
+    success: adminDeliverySuccess,
     messageId: adminMessageId || `ticket_${Date.now()}`,
     directDelivered: adminDeliverySuccess,
     error: adminDeliverySuccess ? undefined : (lastError ? lastError.message : 'Email delivery failed'),
@@ -300,7 +304,7 @@ export async function sendContactEmail({ name, email, subject, category, message
  * Send Recruitment Application Notification Email to ADMIN & Player
  */
 export async function sendRecruitmentEmail(application) {
-  const { senderEmail, adminEmail, pass } = getEmailConfig();
+  const { senderEmail, adminEmail } = getEmailConfig();
   const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
   let adminDeliverySuccess = false;
   let adminMessageId = null;
@@ -423,7 +427,7 @@ export async function sendRecruitmentEmail(application) {
   }
 
   return {
-    success: adminDeliverySuccess || !pass,
+    success: adminDeliverySuccess,
     messageId: adminMessageId || application.id,
     directDelivered: adminDeliverySuccess,
     error: adminDeliverySuccess ? undefined : (lastError ? lastError.message : 'Email delivery failed'),

@@ -41,6 +41,7 @@ export const JoinSection: React.FC = () => {
   const [isSubmittingContact, setIsSubmittingContact] = useState(false);
   const [submittedRef, setSubmittedRef] = useState<string | null>(null);
   const [contactTicket, setContactTicket] = useState<string | null>(null);
+  const [contactEmailDispatched, setContactEmailDispatched] = useState(false);
 
   // Validate Tryout form
   const validateTryouts = () => {
@@ -149,6 +150,7 @@ export const JoinSection: React.FC = () => {
 
       if (res.success) {
         setContactTicket(res.ticketId);
+        setContactEmailDispatched(res.emailDispatched);
         setContactData({
           name: '',
           email: '',
@@ -491,19 +493,24 @@ export const JoinSection: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <span className="sub-header-pill text-[11px]">TRANSMISSION SUCCESSFUL</span>
+                  <span className="sub-header-pill text-[11px]">
+                    {contactEmailDispatched ? 'TRANSMISSION SUCCESSFUL' : 'INQUIRY RECORDED'}
+                  </span>
                   <h3 className="font-orbitron text-3xl font-black text-white uppercase tracking-tight">
-                    MESSAGE DELIVERED
+                    {contactEmailDispatched ? 'MESSAGE DELIVERED' : 'EMAIL NOT SENT'}
                   </h3>
                   <p className="text-sm text-[#DDE1E8]/80 font-rajdhani max-w-md mx-auto">
-                    Your inquiry has been relayed to GE Esports management at{' '}
-                    <strong className="text-white">{BRAND.email}</strong>.
+                    {contactEmailDispatched
+                      ? <>Your inquiry has been relayed to GE Esports management at <strong className="text-white">{BRAND.email}</strong>.</>
+                      : <>Your inquiry was recorded, but the email notification could not be delivered. Please contact <strong className="text-white">{BRAND.email}</strong> directly.</>}
                   </p>
                   <div className="p-3 rounded-xl bg-[#08060D] border border-[#26213D] inline-block font-orbitron text-lg font-bold text-[#00F0FF] tracking-wider my-2">
                     {contactTicket}
                   </div>
                   <p className="text-xs text-[#8E8A9F] font-rajdhani max-w-md mx-auto">
-                    A confirmation receipt was sent to your email. Expect a response within 24 business hours.
+                    {contactEmailDispatched
+                      ? 'A confirmation receipt was sent to your email. Expect a response within 24 business hours.'
+                      : 'No email confirmation was sent. Please contact us directly if your inquiry is urgent.'}
                   </p>
                 </div>
 
@@ -517,7 +524,10 @@ export const JoinSection: React.FC = () => {
                   </a>
 
                   <button
-                    onClick={() => setContactTicket(null)}
+                    onClick={() => {
+                      setContactTicket(null);
+                      setContactEmailDispatched(false);
+                    }}
                     className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#075BFF] to-[#8B5CF6] text-white font-orbitron text-xs font-bold uppercase tracking-wider transition-colors"
                   >
                     SEND ANOTHER INQUIRY

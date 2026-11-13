@@ -110,14 +110,14 @@ export async function sendContactMessage(payload: SendContactPayload): Promise<S
     return data;
   } catch (err: any) {
     console.warn('API error, falling back to client-assisted simulation:', err.message);
-    // If backend is offline during local test, return clean graceful receipt
     return {
-      success: true,
-      message: 'Transmission dispatched and queued for delivery.',
-      ticketId: `MSG-LOC-${Date.now().toString(36).toUpperCase()}`,
+      success: false,
+      message: 'Contact service is unavailable.',
+      ticketId: '',
       timestamp: new Date().toISOString(),
       emailDispatched: false,
       emailError: err.message,
+      error: err.message,
     };
   }
 }
