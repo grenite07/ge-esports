@@ -48,6 +48,7 @@ export function getEmailConfig() {
  * Instantiate a Nodemailer transport instance
  */
 function createTransportInstance({ host, port, secure, user, pass }) {
+  const isRender = Boolean(process.env.RENDER || process.env.IS_RENDER);
   return nodemailer.createTransport({
     host,
     port,
@@ -60,9 +61,9 @@ function createTransportInstance({ host, port, secure, user, pass }) {
       minVersion: 'TLSv1.2',
       rejectUnauthorized: process.env.NODE_ENV === 'production' && !process.env.ALLOW_SELF_SIGNED_CERTS,
     },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 20000,
+    connectionTimeout: isRender ? 6000 : 12000,
+    greetingTimeout: isRender ? 6000 : 12000,
+    socketTimeout: isRender ? 8000 : 15000,
   });
 }
 
@@ -212,14 +213,21 @@ export async function sendDirectRelayEmail({ to, replyTo, subject, fields }) {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'Referer': process.env.FRONTEND_URL || 'https://ge-esports.vercel.app',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       },
       body: JSON.stringify(payload),
     });
 
     if (res.ok) {
       const data = await res.json();
-      console.log(`[RELAY SUCCESS] Email transmitted to ${targetEmail}`);
-      return { success: true, method: 'direct_relay', details: data };
+      if (data && (data.success === 'true' || data.success === true)) {
+        console.log(`[RELAY SUCCESS] Email transmitted to ${targetEmail}`);
+        return { success: true, method: 'direct_relay', details: data };
+      } else {
+        console.warn(`[RELAY PENDING ACTIVATION] ${data?.message}`);
+        return { success: false, status: 200, error: data?.message };
+      }
     } else {
       const errText = await res.text().catch(() => '');
       console.warn(`[RELAY WARN] HTTP ${res.status}: ${errText}`);
